@@ -1,6 +1,103 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
+public class Cell : MonoBehaviour
+{
+    
+    private bool _live = false;
+    private Cell[] _neighbours = new Cell[8];
+    private GameObject _gameObject;
+    private Renderer _renderer;
+    private int _liveCount = 0;
+
+    // コンストラクター
+    public Cell(GameObject gameObject, Renderer renderer)
+    {
+        this._gameObject = gameObject;
+        this._renderer = renderer;
+        this._live = Random.Range(0.0f, 1.0f) > 0.5 ? true : false;
+        this.resetLive();
+        this.rendererUpdate();
+    }
+
+
+
+    public void setNeighbours(Cell[] neighbours)
+    {
+        _neighbours = neighbours;
+    }
+
+    public void setLiveCount()
+    {
+        this._liveCount = 0;
+        foreach (Cell n in _neighbours)
+        {
+            
+            if (n._live)
+            {
+                this._liveCount++;
+            }
+        }
+       
+    }
+
+    public void setLive()
+    {
+        if (this._live)
+        {
+            if (this._liveCount == 2 || this._liveCount == 3)
+            {
+                // 生存
+                this._live = true;
+            }
+            else
+            {
+                // 過疎 または　過密
+                this._live = false;
+            }
+        }
+        else
+        {
+            if (this._liveCount == 3)
+            {
+                // 誕生
+                this._live = true;
+            }
+            else
+            {
+                // 死
+                this._live = false;
+            }
+        }
+
+        this.rendererUpdate();
+
+    }
+
+
+    private void rendererUpdate()
+    {
+        if (this._live)
+        {
+            _renderer.material.EnableKeyword("_EMISSION");
+            _renderer.material.SetColor("_EmissionColor", new Color(0.6f, 1f, 0.7f));
+            _renderer.material.color = new Color(0.6f, 1f, 0.7f);
+
+        }
+        else
+        {
+            _renderer.material.DisableKeyword("_EMISSION");
+            _renderer.material.SetColor("_EmissionColor", new Color(0f, 0f, 0f));
+            _renderer.material.color = Color.black;
+
+        }
+    }
+    public void resetLive()
+    {
+        this._live = Random.Range(0.0f, 1.0f) > 0.5 ? true : false;
+    }
+
+}
 
 public class LifeGame : MonoBehaviour
 {
@@ -8,24 +105,16 @@ public class LifeGame : MonoBehaviour
     private GameObject cellPrefab;
     [SerializeField]
     private Vector2 size;
+    private List<List<Cell>> cells = new List<List<Cell>>();
 
-    private List<List<GameObject>> cells = new List<List<GameObject>>();
-    private List<List<Renderer>> renderers = new List<List<Renderer>>();
-    private List<List<bool>> state = new List<List<bool>>();
-
-    private float time = 0;
     // Start is called before the first frame update
     void Start()
     {
-        var center = this.transform.position;
-        
-        var prefabSize = cellPrefab.transform.localScale;
-        for(var x = 0; x < size.x; x++)
+        for (var x = 0; x < size.x; x++)
         {
-            List<GameObject> cellRow = new List<GameObject>();
-            List<Renderer> rendererRow = new List<Renderer>();
-            List<bool> stateRow = new List<bool>();
-            for(var y = 0; y < size.y; y++)
+   
+            List<Cell> cellsRows = new List<Cell>();
+            for (var y = 0; y < size.y; y++)
             {
                 GameObject c = Instantiate(
                     cellPrefab,
@@ -36,124 +125,65 @@ public class LifeGame : MonoBehaviour
                     Quaternion.identity
                     );
                 c.transform.localScale = new Vector3(0.75f, 0.75f, 0.75f);
-                cellRow.Add(c);
-                rendererRow.Add(c.GetComponent<Renderer>());
-                stateRow.Add((Random.Range(0.0f,1.0f) > 0.5) ? true: false);
-                
-            }
-            cells.Add(cellRow);
-            renderers.Add(rendererRow);
-            state.Add(stateRow);
 
+                Cell co = new Cell(
+                    c,
+                    c.GetComponent<Renderer>()
+                   );
+                cellsRows.Add(co);
+            }
+            cells.Add(cellsRows);
         }
 
+        for (var x = 0; x < size.x; x++)
+        {
+            for (var y = 0; y < size.y; y++)
+            {
+                int left = (x > 0) ? x - 1 : (int)size.x - 1;
+                int right = (x + 1 < (int)size.x) ? x + 1 : 0;
+                int top = (y > 0) ? y - 1 : (int)size.y - 1;
+                int bottom = (y + 1 < (int)size.y) ? y + 1 : 0;
+                Cell[] neighbours = {
+                    cells[left][top],
+                    cells[x][top],
+                    cells[right][top],
+                    cells[left][y],
+                    cells[right][y],
+                    cells[left][bottom],
+                    cells[x][bottom],
+                    cells[right][bottom]
+                };
+                cells[x][y].setNeighbours(neighbours);
+            }
+        }
     }
 
     // Update is called once per frame
     void Update()
     {
+        System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+        sw.Start();
+
         if (Input.GetKey(KeyCode.Space))
         {
             for (var x = 0; x < size.x; x++)
             {
                 for (var y = 0; y < size.y; y++)
                 {
-                    state[x][y] = (Random.Range(0.0f, 1.0f) > 0.5) ? true : false;
+                    cells[x][y].resetLive();
+             
                 }
             }
 
         }
 
-        bool[,] nextState = new bool[(int)size.x, (int)size.y];
 
         for (var x = 0; x < cells.Count; x++)
         {
 
             for (var y = 0; y < cells[x].Count; y++)
             {
-
-                
-                if (state[x][y])
-                {
-                    renderers[x][y].material.EnableKeyword("_EMISSION");
-                    renderers[x][y].material.SetColor("_EmissionColor", new Color(0.6f, 1f, 0.7f));
-                    renderers[x][y].material.color = new Color(0.6f, 1f, 0.7f);
-
-    }
-                else
-                {
-                    renderers[x][y].material.DisableKeyword("_EMISSION");
-                    renderers[x][y].material.SetColor("_EmissionColor", new Color(0f, 0f, 0f));
-                    renderers[x][y].material.color = Color.black;
-
-                }
-
-                int left = (x > 0) ? x - 1 : (int)size.x - 1;
-                int right = (x + 1 < (int)size.x) ? x + 1 : 0;
-                int top = (y > 0) ? y - 1 : (int)size.y - 1;
-                int bottom = (y + 1 < (int)size.y) ? y + 1 : 0;
-                int lifeCount = 0;
-
-                if (state[left][top])
-                {
-                    lifeCount++;
-                }
-                if (state[x][top])
-                {
-                    lifeCount++;
-                }
-                if (state[right][top])
-                {
-                    lifeCount++;
-                }
-
-                if (state[left][y])
-                {
-                    lifeCount++;
-                }
-                if (state[right][y])
-                {
-                    lifeCount++;
-                }
-                if (state[left][bottom])
-                {
-                    lifeCount++;
-                }
-                if (state[x][bottom])
-                {
-                    lifeCount++;
-                }
-                if (state[right][bottom])
-                {
-                    lifeCount++;
-                }
-
-                bool next = state[x][y];
-                if (state[x][y])
-                {
-                    if (lifeCount == 2 || lifeCount == 3)
-                    {
-                        next = true;
-                    }
-                    else
-                    {
-                        next = false;
-                    }
-
-                }
-                else
-                {
-                    if (lifeCount == 3)
-                    {
-                        next = true;
-                    }
-                    else
-                    {
-                        next = false;
-                    }
-                }
-
-                nextState[x, y] = next;
+                cells[x][y].setLiveCount();
             }
 
         }
@@ -162,9 +192,12 @@ public class LifeGame : MonoBehaviour
 
             for (var y = 0; y < cells[x].Count; y++)
             {
-                state[x][y] = nextState[x, y];
+                cells[x][y].setLive();
             }
         }
-    }
 
+        sw.Stop();
+        Debug.Log(sw.ElapsedMilliseconds + "ms");
+
+    }
 }
